@@ -1,0 +1,82 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    env:
+      GOFLAGS: -mod=vendor
+      GOPROXY: "off"
+
+    steps:
+
+      - name: Print
+        run: echo "Deploying to $DEPLOY_ENV"
+
+      - name: Set up Go 1.146
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.146
+        id: go
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v1
+
+      # Only necessary because we are using Helm and need to pull template files
+      # from a centrally controlled remote repository
+      - name: Check out helm templates
+        uses: actions/checkout@v2
+        with:
+          repository: {NAMESPACE}/{PROJECT}
+          path: helm-templates
+          ref: v1.3.1
+          token: ${{ secrets.REPO_PAT }}
+
+      - name: Move templates to local project directory
+        run: mv {PROJECT}/templates helm/templates
+
+      - name: Build Go code
+        run: make build
+
+      # We use AWS ECR to store built images, then Helm instructs Kubernetes to pull them down
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build, tag, and push image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/${GITHUB_REPOSITORY#*/}:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/${GITHUB_REPOSITORY#*/}:$IMAGE_TAG
+
+      - name: Logout of Amazon ECR
+        if: always()
+        run: docker logout ${{ steps.login-ecr.outputs.registry }}
+
+      - name: Install aws-iam-authenticator
+        uses: prepor/action-aws-iam-authenticator@master
+
+      - name: Deploy Helm
+        run: |
+          curl -LO https://git.io/get_helm.sh
+          chmod 700 get_helm.sh
+          ./get_helm.sh
+          mkdir ~/.helm
+          mkdir ~/.helm/plugins
+          helm plugin install https://github.com/futuresimple/helm-secrets
+          helm secrets upgrade --install ${GITHUB_REPOSITORY#*/} ./helm --namespace ${GITHUB_REPOSITORY#*/} -f helm/values.yaml -f helm/secrets.yaml --debug --set deployment.image.tag=$GITHUB_SHA
+          kubectl get deploy -n ${GITHUB_REPOSITORY#*/} --no-headers -o custom-columns=":metadata.name" | xargs -n 1 kubectl rollout status -n ${GITHUB_REPOSITORY#*/} deploy

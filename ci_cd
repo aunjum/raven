@@ -1,0 +1,7 @@
+https://qvault.io/golang/golang-project-structure/
+make build # build the code
+make test # test the code
+make vet # check the vetting
+make lint # check the linting
+make fmt # check the formatting
+make # ensure everything passes and builds
