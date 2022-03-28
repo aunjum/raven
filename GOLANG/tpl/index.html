@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>Raven</title>
+    <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+<main>
+    <header>
+        <a class="logo" href="/">Raven</a>
+        <form action="/search" method="GET">
+            <label>
+                <input autofocus class="search-input" value="{{ .Query }}" placeholder="Search ..." type="search" name="q"/>
+            </label>
+        </form>
+        <a href="https://github.com/freshman-tech/news" class="button github-button">Mail</a>
+    </header>
+    <section class="container">
+        <ul class="search-results">
+            {{ range.Results.Articles }}
+            <li class="news-article">
+                <div>
+                    <a target="_blank" rel="noreferrer noopener" href="{{.URL}}">
+                        <h3 class="title">{{.Title }}</h3>
+                    </a>
+                    <p class="description">{{ .Description }}</p>
+                    <div class="metadata">
+                        <p class="source">{{ .Source.Name }}</p>
+                        <time class="published-date">{{ .PublishedAt }}</time>
+                    </div>
+                </div>
+                <img class="article-image" src="{{ .URLToImage }}"  alt=""/>
+            </li>
+            {{ end }}
+        </ul>
+    </section>
+</main>
+</body>
+</html>
